@@ -1,59 +1,62 @@
 use ethers::prelude::*;
 use ethers::providers::{Http, Provider};
 use std::error::Error;
-use std::time::Instant;
-use erigon_db::{Erigon, env_open};
+use std::time::{Duration, Instant};
+use std::{fmt::Write};
 
+use indicatif::{ProgressBar, ProgressState, ProgressStyle};
+
+#[derive(Debug)]
+struct Contract {
+    address: Address,
+    code: Bytes,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let path = std::path::Path::new(env!("ERIGON_CHAINDATA"));
-
-    // Open an mdbx environment and begin a read-only database transaction
-    let env = env_open(path)?;
-    let db = Erigon::begin(&env)?;
-
-    let txs = db.walk_txs_canonical(None).unwrap();
-    for tx in txs {
-        dbg!(tx.unwrap().1.hash());
-    }
-
-    Ok(())
-}
-
-// #[tokio::main]
-async fn main2() -> Result<(), Box<dyn Error>> {
-    let api_key = env!("INFURA_API_KEY");
-    let url = format!("https://mainnet.infura.io/v3/{}", api_key);
+    let url = "http://localhost:9545";
     let provider = Provider::<Http>::try_from(url)?;
 
-    let mut all_transactions = vec![];
+    let mut contracts: Vec<Contract> = vec![];
 
-    let mut contract_txs = vec![];
+    let time = Instant::now();
 
-    let mut bytecodes = vec![];
+    let latest_block = *&provider.get_block_number().await?.as_u64();
+    println!("latest block {}", latest_block);
 
-    for block_number in 11031667..12031667 {
-        let start = Instant::now();
+    let start_block = 2499000;
+    let pb = ProgressBar::new(latest_block - start_block);
+    pb.set_style(ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+        .unwrap()
+        .with_key("eta", |state: &ProgressState, w: &mut dyn Write| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap())
+        .progress_chars("#>-"));
 
+
+    for block_number in start_block..latest_block {
         let txs = &provider.get_block_with_txs(block_number).await?.unwrap();
         // println!("got block nr {} with txs {}", block_number, txs.transactions.len());
         for tx in &txs.transactions {
             if tx.to.is_none() {
-                println!("got contract creation tx");
-                contract_txs.push(tx.clone());
-                bytecodes.push(tx.input.clone());
+                let receipt = &provider.get_transaction_receipt(tx.hash).await?.unwrap();
+                contracts.push(Contract { address: receipt.contract_address.unwrap(), code: tx.input.clone() })
             }
         }
-        all_transactions.extend(txs.transactions.clone());
-        let end = Instant::now();
-        let elapsed_time = end - start;
-        println!("Elapsed time: {:?}", elapsed_time);
+
+        pb.set_position(latest_block - block_number);
     }
-    let contract_size_total: usize = bytecodes.iter().map(|b| b.len()).sum();
+
+    let contract_size_total: usize = contracts.iter().map(|b| b.code.len()).sum();
 
     println!("got {} contract creations with a total of {} bytes of code",
-             contract_txs.len(), contract_size_total);
+             contracts.len(), contract_size_total);
+
+
+    dbg!(&contracts);
+
+    pb.finish_with_message("indexed");
+    let end = Instant::now();
+    let elapsed_time = end - time;
+    println!("Elapsed time: {:?}, contracts/s {}", elapsed_time, contracts.len() / elapsed_time.as_secs() as usize);
 
     Ok(())
 }

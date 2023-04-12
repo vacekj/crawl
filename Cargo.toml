@@ -9,4 +9,5 @@ edition = "2021"
 erigon-db = { git = "https://github.com/vacekj/erigon-db", version = "0.1.0" }
 
 ethers = { version = "*" }
+indicatif = "0.17.3"
 tokio = { version = "1.0", features = ["full"] }
