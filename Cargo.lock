@@ -708,6 +708,7 @@ dependencies = [
 [[package]]
 name = "erigon-db"
 version = "0.1.0"
+source = "git+https://github.com/vacekj/erigon-db#1a88fd2c6aedcd23cff05100b1b64c5d79340f40"
 dependencies = [
  "Inflector",
  "arrayref",
