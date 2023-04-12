@@ -2,11 +2,28 @@ use ethers::prelude::*;
 use ethers::providers::{Http, Provider};
 use std::error::Error;
 use std::time::Instant;
+use erigon_db::{Erigon, env_open};
 
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let api_key = "";
+    let path = std::path::Path::new(env!("ERIGON_CHAINDATA"));
+
+    // Open an mdbx environment and begin a read-only database transaction
+    let env = env_open(path)?;
+    let db = Erigon::begin(&env)?;
+
+    let txs = db.walk_txs_canonical(None).unwrap();
+    for tx in txs {
+        dbg!(tx.unwrap().1.hash());
+    }
+
+    Ok(())
+}
+
+// #[tokio::main]
+async fn main2() -> Result<(), Box<dyn Error>> {
+    let api_key = env!("INFURA_API_KEY");
     let url = format!("https://mainnet.infura.io/v3/{}", api_key);
     let provider = Provider::<Http>::try_from(url)?;
 
