@@ -3,6 +3,10 @@ use ethers::providers::{Http, Provider};
 use std::error::Error;
 use std::time::{Duration, Instant};
 use std::{fmt::Write};
+use std::fs::File;
+use std::io::Write as ioWrite;
+use std::path::Path;
+use ethers::utils::hex::ToHex;
 
 use indicatif::{ProgressBar, ProgressState, ProgressStyle};
 
@@ -31,10 +35,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with_key("eta", |state: &ProgressState, w: &mut dyn Write| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap())
         .progress_chars("#>-"));
 
-
     for block_number in start_block..latest_block {
         let txs = &provider.get_block_with_txs(block_number).await?.unwrap();
-        // println!("got block nr {} with txs {}", block_number, txs.transactions.len());
         for tx in &txs.transactions {
             if tx.to.is_none() {
                 let receipt = &provider.get_transaction_receipt(tx.hash).await?.unwrap();
@@ -47,16 +49,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let contract_size_total: usize = contracts.iter().map(|b| b.code.len()).sum();
 
+    pb.finish_with_message("indexed");
     println!("got {} contract creations with a total of {} bytes of code",
              contracts.len(), contract_size_total);
 
-
-    dbg!(&contracts);
-
-    pb.finish_with_message("indexed");
     let end = Instant::now();
     let elapsed_time = end - time;
-    println!("Elapsed time: {:?}, contracts/s {}", elapsed_time, contracts.len() / elapsed_time.as_secs() as usize);
+    println!("Elapsed time: {:?}, contracts/s {}", elapsed_time, contracts.len() / elapsed_time.as_millis() as usize);
+
+    let dir_path = Path::new("contracts");
+
+    if !dir_path.exists() {
+        std::fs::create_dir(dir_path).expect("Failed to create directory");
+    }
+
+    for contract in &contracts {
+        let mut file = File::create(format!("contracts/{}.bin", contract.address.to_string())).unwrap();
+        file.write(contract.code.as_ref()).expect("couldn't write contract bytecode to file");
+    }
 
     Ok(())
 }
