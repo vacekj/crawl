@@ -28,7 +28,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let latest_block = *&provider.get_block_number().await?.as_u64();
     println!("latest block {}", latest_block);
 
-    let start_block = 2499000;
+    let start_block = 0;
     let pb = ProgressBar::new(latest_block - start_block);
     pb.set_style(ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
         .unwrap()
